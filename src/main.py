@@ -1,13 +1,11 @@
 import gradio as gr
 import os
-import shutil
-import time
 import pandas as pd
 import numpy as np
-import uuid
 import tensorflow as tf
 from tensorflow.keras.applications.resnet50 import ResNet50
 import pinecone
+import plotly.express as px
 from dotenv import load_dotenv
 
 
@@ -52,6 +50,14 @@ def image_input(inp):
         file_path = dataset_path / filename
         results.append(file_path)
         print(file_path)
+    colorscale = px.colors.named_colorscales()[3]
+    df = pd.DataFrame({
+        "Fruits": ["Apples", "Oranges", "Bananas", "Pineapple", "Strawberry", "Mango", "Blueberry", "Tomatoes", "Watermelon", "Melon", "Peach"],
+        "Scores": [4, 3.5, 8, 5, 6, 6, 3, 5, 7, 6, 10],
+    })
+    fig = px.bar(df, x="Fruits", y="Scores", color='Scores', color_continuous_scale=colorscale,
+                 )
+    results.append(fig)
     return results
 
 
@@ -65,7 +71,9 @@ with gr.Blocks() as demo:
             out1 = gr.Image(type="filepath")
             out2 = gr.Image(type="filepath")
             out3 = gr.Image(type="filepath")
-            btn.click(image_input, image, outputs=[out1, out2, out3])
+        with gr.Row():
+            out4 = gr.Plot()
+            btn.click(image_input, image, outputs=[out1, out2, out3, out4])
 
 # Connect to pinecone environment
 load_dotenv()
