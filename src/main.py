@@ -6,24 +6,24 @@ import tensorflow as tf
 from tensorflow.keras.applications.resnet50 import ResNet50
 import pinecone
 import plotly.express as px
+import matplotlib.pyplot as plt
 from dotenv import load_dotenv
+from sklearn.decomposition import PCA
 
 
-# results = ['' for i in range(3)]
 
 def prints(s):
     print(f'[X] {s}')
 
 
 def image_input(inp):
-    # Prepare model inpu
+    # Prepare model input
     resized_image_rgb = inp.convert('RGB')
     prints('image converted')
     resized_image = resized_image_rgb.resize((224, 224))
     prints('image resized')
     input_nparr = np.array(resized_image)
 
-    # model_input = tf.reshape(input_nparr, [1, 224, 224, 3])
     final_input = tf.keras.applications.resnet50.preprocess_input(input_nparr)
     prints('image preprocessed')
     final_input = final_input[None, :]
@@ -36,44 +36,71 @@ def image_input(inp):
     emb = avg_pool(model(final_input))
     prints('inference completed')
 
-    # Query top 3 nearest embeddings
+    # Query top 10 nearest embeddings
     print('[*] sending query')
-    query_results = index.query(emb.numpy().tolist(), top_k=3)
+    query_results = index.query(emb.numpy().tolist(), top_k=10)
     prints('query successful')
 
     # Save query results to global variable
     from pathlib import Path
     dataset_path = Path('full_dataset')
     results = []
+    scores = []
     for r in query_results['matches']:
         filename = r['id'] + ".png"
+        scores.append(r['score'])
         file_path = dataset_path / filename
-        results.append(file_path)
-        print(file_path)
-    colorscale = px.colors.named_colorscales()[3]
+        results.append(str(file_path))
+    colorscale = px.colors.named_colorscales()[74]
     df = pd.DataFrame({
-        "Fruits": ["Apples", "Oranges", "Bananas", "Pineapple", "Strawberry", "Mango", "Blueberry", "Tomatoes", "Watermelon", "Melon", "Peach"],
-        "Scores": [4, 3.5, 8, 5, 6, 6, 3, 5, 7, 6, 10],
+        "Results No.": list(range(1, 11)),
+        "Scores": scores,
     })
-    fig = px.bar(df, x="Fruits", y="Scores", color='Scores', color_continuous_scale=colorscale,
+    fig = px.bar(df, x="Results No.", y="Scores", color='Scores', color_continuous_scale=colorscale,
+                 range_y=[min(scores), max(scores)],
                  )
-    results.append(fig)
-    return results
+    results = [(results[i], f"{i + 1}")
+               for i in range(10)]
+    return results, fig
 
 
-with gr.Blocks() as demo:
-    with gr.Column(variant="panel"):
-        with gr.Row():
-            image = gr.Image(type="pil")
-        with gr.Row():
-            btn = gr.Button("Search image").style(full_width=True)
-        with gr.Row():
-            out1 = gr.Image(type="filepath")
-            out2 = gr.Image(type="filepath")
-            out3 = gr.Image(type="filepath")
-        with gr.Row():
-            out4 = gr.Plot()
-            btn.click(image_input, image, outputs=[out1, out2, out3, out4])
+def generate_viz():
+    num_embeddings = 579
+    vectors = index.fetch(ids=[str(i) for i in range(num_embeddings)])
+    ids = []
+    embeddings = []
+    for _id, vector in vectors['vectors'].items():
+        ids.append(_id)
+        embeddings.append(vector['values'])
+    embeddings = np.array(embeddings)
+    pca2 = PCA(n_components=3).fit(embeddings)
+    pca2d = pca2.transform(embeddings)
+    import plotly.graph_objs as go
+    scene = dict(xaxis=dict(title='PC1'), yaxis=dict(title='PC2'), zaxis=dict(title='PC3'))
+    trace = go.Scatter3d(x=pca2d[:, 0], y=pca2d[:, 1], z=pca2d[:, 2], mode='markers')
+    layout = go.Layout(margin=dict(l=0, r=0), scene=scene, height=1000, width=1000)
+    data = [trace]
+    fig = go.Figure(data=data, layout=layout)
+    return fig
+
+
+with gr.Blocks(title='Big Data Project') as demo:
+    with gr.Tabs():
+        with gr.Tab('Image Search'):
+            with gr.Column(variant="panel"):
+                with gr.Row():
+                    image = gr.Image(type="pil")
+                with gr.Row():
+                    btn_1 = gr.Button("Search image").style(full_width=True)
+                with gr.Row():
+                    gallery = gr.Gallery().style(columns=5, rows=2, object_fit="contain", height="auto")
+                with gr.Row():
+                    pl = gr.Plot()
+                btn_1.click(image_input, image, outputs=[gallery, pl])
+        with gr.Tab('Embeddings Visualization'):
+            btn_2 = gr.Button("Generate").style(full_width=True)
+            plot_3d = gr.Plot()
+            btn_2.click(generate_viz, None, outputs=plot_3d)
 
 # Connect to pinecone environment
 load_dotenv()
