@@ -1,0 +1,17 @@
+docker network create --driver=bridge sp-net
+
+docker run -itd --net=sp-net -p 8080:8080 -p 7707:7707 --expose 22  --name m1v1 --hostname spark-master 5297c1ae1315
+docker run -itd --net=sp-net --expose 22         --name s2v1 --hostname spark-slave1         5297c1ae1315
+docker run -itd --net=sp-net --expose 22         --name s1v1 --hostname spark-slave2         5297c1ae1315
+
+docker exec -it m1v1 bash
+
+start-all.sh
+
+spark-submit --master spark://spark-master:7077   --deploy-mode client main.py dataset2.parquet
+
+VOLUME METHOD 2
+docker volume create spark-tf
+docker run -itd --net=sp-net -p 8080:8080 -p 7707:7707 --expose 22  --name m1v2 --hostname spark-master --mount source=spark-tf,target=/app 5297c1ae1315
+docker run -itd --net=sp-net --expose 22         --name s2v2 --hostname spark-slave1 --mount source=spark-tf,target=/app 5297c1ae1315                   
+docker run -itd --net=sp-net --expose 22         --name s1v1 --hostname spark-slave2   --mount source=spark-tf,target=/app      5297c1ae1315
