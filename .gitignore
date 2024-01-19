@@ -1,2 +1,11 @@
 full_dataset
 .env
+banana.parquet
+dataset2
+embeddings.parquet
+venv
+.env
+dataset
+dataset2.parquet
+.idea
+out
